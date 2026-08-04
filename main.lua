@@ -74,8 +74,7 @@ TabSettings:Toggle({
 -- ==============================================================================
 -- ASYNC MODULE DOWNLOADER (GITHUB SETUP)
 -- ==============================================================================
--- UPDATE THIS LINK TO MATCH YOUR NEW GITHUB REPOSITORY:
-local baseUrl = "https://raw.githubusercontent.com/RAFSUN-BOSS-ACTIV/Roblox/main/"
+local baseUrl = "https://raw.githubusercontent.com/RAFSUN-BOSS-ACTIV/Roblox/refs/heads/main/"
 
 local modulesToLoad = {
     { Name = "Aimbot",        Url = baseUrl .. "Aimbot/aimbot.lua",       Tab = TabAimbot },
