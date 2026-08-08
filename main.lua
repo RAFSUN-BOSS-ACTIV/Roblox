@@ -1,7 +1,7 @@
 -- ==============================================================================
--- LULLABY v18.3 - ADVANCED AIMBOT, VIS CHECK & TARGET GLOW (WINDUI PRO)
+-- LULLABY v18.4 - COLLISION TAB, ALL-NOCLIP & LAND BYPASS (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.3 with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v18.4 with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -28,7 +28,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.3",
+    Title = "⚡ Lullaby Modular Hub v18.4",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -54,7 +54,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.3 Aimbot & Vis-Check Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.4 Full Collision System Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -71,12 +71,17 @@ local Colors = { ESP = Color3.fromRGB(0, 255, 0), MCP = Color3.fromRGB(255, 0, 0
 local AimConfig = { 
     Enabled = false, TargetPlayers = true, TargetMCP = true, 
     ShowFOV = false, FOV_Size = 150, VisCheck = false,
-    TargetPart = "Head", -- "Head", "Torso", "Legs"
+    TargetPart = "Head", 
     Smoothness = 0.5, Speed = 1,
     LockHighlight = false, ProjectileBox = false
 }
 
-local MagicConfig = { SpeedEnabled = false, Speed = 0, JumpEnabled = false, Jump = 50, AirJump = false, ClickTP = false, GodMode = false, ItemImmunity = false, Invisibility = false, Fly = false, FlySpeed = 50, WallNoclip = false, UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false }
+local MagicConfig = { 
+    SpeedEnabled = false, Speed = 0, JumpEnabled = false, Jump = 50, AirJump = false, ClickTP = false, 
+    GodMode = false, ItemImmunity = false, Invisibility = false, Fly = false, FlySpeed = 50, 
+    WallNoclip = false, NoclipWall = false, NoclipEverything = false, BypassLand = false,
+    UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false 
+}
 
 local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
 
@@ -87,6 +92,7 @@ local TabVisuals = Window:Tab({ Title = "ESP & Visuals", Icon = "eye" })
 local TabRadar = Window:Tab({ Title = "Interactive Radar", Icon = "radar" })
 local TabAimbot = Window:Tab({ Title = "Aimbot (Import)", Icon = "crosshair" })
 local TabMagic = Window:Tab({ Title = "Magic & Exploits", Icon = "wand-2" })
+local TabCollision = Window:Tab({ Title = "Collision (All)", Icon = "box-select" }) -- NEW TAB
 local TabTeleport = Window:Tab({ Title = "Teleport Hub", Icon = "map-pin" })
 local TabEntity = Window:Tab({ Title = "Entity Manager", Icon = "package" })
 
@@ -106,12 +112,17 @@ SecMCPESP:Toggle({ Title = "Enable MCP ESP", Value = false, Callback = function(
 SecMCPESP:Toggle({ Title = "Glow (Aura)", Value = true, Callback = function(v) ESPConfig.MCP.Glow = v end })
 SecMCPESP:Toggle({ Title = "Show Name", Value = true, Callback = function(v) ESPConfig.MCP.Name = v end })
 SecMCPESP:Toggle({ Title = "Show Distance", Value = true, Callback = function(v) ESPConfig.MCP.Distance = v end })
+SecMCPESP:Toggle({ Title = "Show Health Bar", Value = false, Callback = function(v) ESPConfig.MCP.Health = v end })
+SecMCPESP:Toggle({ Title = "Show 2D Box", Value = false, Callback = function(v) ESPConfig.MCP.Box = v end })
+SecMCPESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = function(v) ESPConfig.MCP.Tracer = v end })
 
 local SecItemESP = TabVisuals:Section({ Title = "Item ESP", Icon = "box", Opened = false })
 SecItemESP:Toggle({ Title = "Enable Item ESP", Value = false, Callback = function(v) ESPConfig.Item.Enabled = v; NotifyState("Item ESP", v) end })
 SecItemESP:Toggle({ Title = "Glow (Aura)", Value = true, Callback = function(v) ESPConfig.Item.Glow = v end })
 SecItemESP:Toggle({ Title = "Show Name", Value = true, Callback = function(v) ESPConfig.Item.Name = v end })
 SecItemESP:Toggle({ Title = "Show Distance", Value = true, Callback = function(v) ESPConfig.Item.Distance = v end })
+SecItemESP:Toggle({ Title = "Show 2D Box", Value = false, Callback = function(v) ESPConfig.Item.Box = v end })
+SecItemESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = function(v) ESPConfig.Item.Tracer = v end })
 
 -- --- RADAR TAB ---
 local SecRadar = TabRadar:Section({ Title = "Interactive 2D Radar", Icon = "radar", Opened = true })
@@ -172,7 +183,8 @@ SecCombat:Toggle({ Title = "High Power Kick (Tool)", Value = false, Callback = f
             for _, obj in ipairs(workspace:GetDescendants()) do
                 if obj:IsA("Model") and obj ~= char and obj:FindFirstChild("HumanoidRootPart") then
                     local targetRoot = obj:FindFirstChild("HumanoidRootPart")
-                    if (targetRoot.Position - root.Position).Magnitude < 15 then
+                    local dist = (targetRoot.Position - root.Position).Magnitude
+                    if dist < 15 then
                         local bv = Instance.new("BodyVelocity", targetRoot)
                         bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
                         bv.Velocity = (targetRoot.Position - root.Position).Unit * 500 + Vector3.new(0, 100, 0)
@@ -198,7 +210,14 @@ SecExploits:Toggle({ Title = "God Mode (NonTarget Evasion)", Value = false, Call
     end
     NotifyState("God Mode", v)
 end })
+SecExploits:Toggle({ Title = "Item Immunity (No Harm)", Value = false, Callback = function(v) MagicConfig.ItemImmunity = v; NotifyState("Item Immunity", v) end })
 SecExploits:Toggle({ Title = "True Invisibility (Ghost)", Value = false, Callback = function(v) MagicConfig.Invisibility = v; NotifyState("Invisibility", v) end })
+
+-- --- COLLISION (ALL) TAB ---
+local SecNoclip = TabCollision:Section({ Title = "Noclip Engine", Icon = "ghost", Opened = true })
+SecNoclip:Toggle({ Title = "Go Through Walls", Value = false, Callback = function(v) MagicConfig.NoclipWall = v; NotifyState("Wall Noclip", v) end })
+SecNoclip:Toggle({ Title = "Go Through Everything", Value = false, Callback = function(v) MagicConfig.NoclipEverything = v; NotifyState("Everything Noclip", v) end })
+SecNoclip:Toggle({ Title = "Include Land (Go Through Floor)", Value = false, Callback = function(v) MagicConfig.BypassLand = v; NotifyState("Land Bypass", v) end })
 
 -- --- TELEPORT HUB TAB ---
 local SecClickTP = TabTeleport:Section({ Title = "Click Teleport", Icon = "mouse-pointer", Opened = true })
@@ -233,6 +252,29 @@ SecPlayerTP:Button({ Title = "Teleport to Selected Player", Callback = function(
             myRoot.CFrame = target.Character.HumanoidRootPart.CFrame 
             WindUI:Notify({Title="Teleported", Content="Moved to " .. target.Name, Duration=1.5})
         end
+    end
+end })
+
+local SecWaypoints = TabTeleport:Section({ Title = "Saved Waypoints (Max 10)", Icon = "map-pin", Opened = false })
+SecWaypoints:Input({ Title = "Waypoint Name", Placeholder = "e.g. Safe Zone, Base", Callback = function(text) TeleportConfig.WaypointNameInput = text end })
+
+local function CountWaypoints() local c = 0; for _ in pairs(_G.SavedWaypoints) do c = c + 1 end; return c end
+local WaypointGroup = SecWaypoints:Group({})
+
+SecWaypoints:Button({ Title = "Save Current Position", Callback = function()
+    if CountWaypoints() >= 10 then WindUI:Notify({Title="Limit Reached", Content="You can only save 10 waypoints at a time.", Duration=3}); return end
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if myRoot and TeleportConfig.WaypointNameInput ~= "" then
+        local name = TeleportConfig.WaypointNameInput
+        _G.SavedWaypoints[name] = myRoot.CFrame
+        WaypointGroup:Button({ Title = "TP: " .. name, Callback = function()
+            local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if root and _G.SavedWaypoints[name] then
+                root.CFrame = _G.SavedWaypoints[name]
+                WindUI:Notify({Title="Teleported", Content="Arrived at " .. name, Duration=1.5})
+            end
+        end })
+        WindUI:Notify({Title="Waypoint Saved", Content="Saved Location: " .. name, Duration=2})
     end
 end })
 
@@ -449,8 +491,8 @@ local SelectedForGroup = {}
 GBSaveBtn.MouseButton1Click:Connect(function()
     local count = 0
     for _ in pairs(SelectedForGroup) do count = count + 1 end
-    if count < 2 then
-        WindUI:Notify({Title="Error", Content="Select at least two items to make a group!", Duration=2})
+    if count < 1 then
+        WindUI:Notify({Title="Error", Content="Select at least one item first!", Duration=2})
         return
     end
     local groupName = "Group " .. GroupCounter
@@ -487,6 +529,15 @@ _G.RefreshGroupBuilder = function()
                 end
             end)
         end
+    end
+    if not addedAny then
+        local lbl = Instance.new("TextLabel", GBScroll)
+        lbl.Size = UDim2.new(1, 0, 0, 30)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = "No items marked as Orange in Debug yet!"
+        lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 10
     end
     GBScroll.CanvasSize = UDim2.new(0, 0, 0, GBLayout.AbsoluteContentSize.Y + 10)
 end
@@ -657,13 +708,34 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 6. BACKGROUND WORKERS (MAGNET & EXPLOITS)
+-- 6. BACKGROUND WORKERS (NOCLIP, MAGNET & EXPLOITS)
 -- ==============================================================================
+-- True Physics-Step Noclip
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if char then
+        local doNoclip = MagicConfig.NoclipWall or MagicConfig.NoclipEverything or MagicConfig.WallNoclip
+        if doNoclip then
+            local bypassLand = MagicConfig.BypassLand or MagicConfig.NoclipEverything
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if bypassLand then
+                        part.CanCollide = false
+                    else
+                        local ray = Ray.new(part.Position, Vector3.new(0, -3, 0))
+                        local hit = workspace:FindPartOnRay(ray, char)
+                        if hit then part.CanCollide = true else part.CanCollide = false end
+                    end
+                end
+            end
+        end
+    end
+end)
+
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     local myRoot = char and char:FindFirstChild("HumanoidRootPart")
 
-    -- JUMP POWER ENFORCEMENT
     if MagicConfig.JumpEnabled and char then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then 
@@ -672,7 +744,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- SERVER INVISIBILITY LOOP
     if MagicConfig.Invisibility and char then
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") or part:IsA("Decal") then 
@@ -685,7 +756,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- ANTI-GLITCH ITEM MAGNET
     if TeleportConfig.MagnetActive then
         local destCFrame = nil
         if TeleportConfig.MagnetMode == "Me" and myRoot then
@@ -725,6 +795,19 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
+    if MagicConfig.ItemImmunity then
+        for name, data in pairs(_G.LullabyRegistry) do
+            if data.State == "Item" then
+                for _, inst in ipairs(data.Instances) do
+                    if inst and inst.Parent then
+                        for _, desc in ipairs(inst:GetDescendants()) do if desc:IsA("BasePart") then desc.CanTouch = false end end
+                        if inst:IsA("BasePart") then inst.CanTouch = false end
+                    end
+                end
+            end
+        end
+    end
+
     if MagicConfig.UnlimitedItems or MagicConfig.InstantCooldown then
         local containers = {LocalPlayer:FindFirstChildOfClass("Backpack"), char}
         for _, container in ipairs(containers) do
@@ -742,6 +825,15 @@ RunService.Heartbeat:Connect(function()
             end
         end
     end
+
+    if MagicConfig.InfiniteEnergy and char then
+        pcall(function()
+            for _, val in ipairs(char:GetDescendants()) do
+                local n = string.lower(val.Name)
+                if (val:IsA("NumberValue") or val:IsA("IntValue")) and (string.find(n, "stamina") or string.find(n, "energy") or string.find(n, "power") or string.find(n, "exhaust")) then val.Value = 100 end
+            end
+        end)
+    end
 end)
 
 -- ==============================================================================
@@ -757,13 +849,12 @@ local function drawLine(frame, p1, p2, color, thickness)
     frame.Visible = true
 end
 
--- Projectile Box / Target Lock Indicator
 local TargetAdornment = Instance.new("BoxHandleAdornment", RadarScreen)
 TargetAdornment.Name = "AimbotTargetBox"
 TargetAdornment.AlwaysOnTop = true
 TargetAdornment.ZIndex = 10
 TargetAdornment.Transparency = 0.3
-TargetAdornment.Color3 = Color3.new(1, 0, 0) -- RED
+TargetAdornment.Color3 = Color3.new(1, 0, 0)
 TargetAdornment.Visible = false
 
 local LinesCache, BoxesCache, RadarBlips = {}, {}, {}
@@ -796,7 +887,6 @@ local function getBox(index)
     return box
 end
 
--- Visibility Check Function (Raycast)
 local function isVisible(targetPart, char)
     if not AimConfig.VisCheck then return true end
     local origin = Camera.CFrame.Position
@@ -812,7 +902,6 @@ RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     local myRoot = char and char:FindFirstChild("HumanoidRootPart")
     
-    -- Fly & Speed Logic
     if myRoot and MagicConfig.SpeedEnabled and not MagicConfig.Fly then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if MagicConfig.Speed > 0 and hum and hum.MoveDirection.Magnitude > 0 then
@@ -855,7 +944,6 @@ RunService.RenderStepped:Connect(function()
         if hum and hum.PlatformStand then hum.PlatformStand = false end
     end
 
-    -- UI Cleanup per frame
     for _, frame in ipairs(RadarScreen:GetChildren()) do 
         if frame.Name ~= "Frame" and frame.Name ~= "LullabyRadarNative" and frame.Name ~= "AimbotTargetBox" then frame.Visible = false end 
     end
@@ -872,7 +960,7 @@ RunService.RenderStepped:Connect(function()
     local lineIndex, boxIndex, blipIndex = 1, 1, 1
     local closestTargetPart = nil
     local shortestDistance = AimConfig.FOV_Size
-    local mousePos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2) -- Center of screen
+    local mousePos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
     local function getBlip()
         local blip = RadarBlips[blipIndex]
@@ -895,7 +983,6 @@ RunService.RenderStepped:Connect(function()
         return blip
     end
 
-    -- MAIN ESP & AIMBOT LOOP
     for name, data in pairs(_G.LullabyRegistry) do
         local categoryConfig = nil
         if data.State == "ESP" then categoryConfig = ESPConfig.Player
@@ -914,7 +1001,6 @@ RunService.RenderStepped:Connect(function()
                 local hl = inst:FindFirstChild("LullabyHighlight")
                 local bb = inst:FindFirstChild("LullabyBillboard")
                 
-                -- Determine specific aim part
                 local targetAimPart = nil
                 if inst:IsA("Model") then
                     if AimConfig.TargetPart == "Head" then targetAimPart = inst:FindFirstChild("Head")
@@ -925,7 +1011,6 @@ RunService.RenderStepped:Connect(function()
                     targetAimPart = inst
                 end
 
-                -- Aimbot Target Acquisition
                 local isAimbotTarget = false
                 if AimConfig.Enabled and targetAimPart and char then
                     local validTargetType = (data.State == "ESP" and AimConfig.TargetPlayers) or (data.State == "MCP" and AimConfig.TargetMCP)
@@ -934,7 +1019,7 @@ RunService.RenderStepped:Connect(function()
                         if onScreen then
                             local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                             if distToCenter < shortestDistance then
-                                if isVisible == false or isVisible(targetAimPart, char) then -- Vis Check
+                                if isVisible == false or isVisible(targetAimPart, char) then
                                     shortestDistance = distToCenter
                                     closestTargetPart = targetAimPart
                                 end
@@ -943,23 +1028,19 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
 
-                -- Aimbot visual override logic
                 if closestTargetPart and closestTargetPart:IsDescendantOf(inst) then
                     isAimbotTarget = true
                 end
 
                 local renderColor = defaultColor
                 if isAimbotTarget and AimConfig.LockHighlight then
-                    renderColor = Color3.fromRGB(0, 255, 0) -- Entire body glows Green
-                    
-                    -- Adornment (Red Box) exactly on the targeted part
+                    renderColor = Color3.fromRGB(0, 255, 0)
                     TargetAdornment.Adornee = closestTargetPart
                     TargetAdornment.Size = closestTargetPart.Size * 1.1
                     TargetAdornment.Visible = AimConfig.ProjectileBox
                 end
 
                 if isVisible then
-                    -- Glow
                     if categoryConfig.Glow then
                         if not hl then
                             hl = Instance.new("Highlight", inst)
@@ -972,7 +1053,6 @@ RunService.RenderStepped:Connect(function()
                         hl.OutlineColor = renderColor
                     elseif hl then hl.Enabled = false end
 
-                    -- Name & Health & Distance
                     if categoryConfig.Name or categoryConfig.Health then
                         if not bb then
                             bb = Instance.new("BillboardGui", inst)
@@ -1023,7 +1103,6 @@ RunService.RenderStepped:Connect(function()
                         elseif hpBg then hpBg.Visible = false end
                     elseif bb then bb.Enabled = false end
 
-                    -- Lines, Boxes, Skeleton
                     local rootPart = inst:IsA("Model") and (inst:FindFirstChild("HumanoidRootPart") or inst.PrimaryPart) or (inst:IsA("BasePart") and inst)
                     if rootPart then
                         local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
@@ -1067,7 +1146,6 @@ RunService.RenderStepped:Connect(function()
                             end
                         end
                         
-                        -- Radar Blip
                         if RadarConfig.Enabled and myRoot then
                             local offset = rootPart.Position - myRoot.Position
                             if offset.Magnitude <= 142 then
@@ -1096,17 +1174,14 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- AIMBOT EXECUTION
     if AimConfig.Enabled and closestTargetPart then
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            -- Multiply speed and smoothness for precise mechanical control
             local lerpFactor = AimConfig.Smoothness * AimConfig.Speed
             Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, closestTargetPart.Position), lerpFactor)
         end
     end
 end)
 
--- FULL AIR JUMP FIX
 UserInputService.JumpRequest:Connect(function()
     if MagicConfig.AirJump then
         local char = LocalPlayer.Character
@@ -1137,4 +1212,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v18.3 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v18.4 Executed Successfully!")
