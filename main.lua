@@ -1,7 +1,7 @@
 -- ==============================================================================
--- LULLABY v18.5 - AUTO CLICKER & ADVANCED RADAR FINAL (WINDUI PRO)
+-- LULLABY v18.6 - AUTO CLICKER TOGGLE FIX FINAL (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.5 with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v18.6 with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,7 +29,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.5",
+    Title = "⚡ Lullaby Modular Hub v18.6",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -55,7 +55,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.5 Final Update Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.6 Final Update Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -82,7 +82,7 @@ local MagicConfig = {
     GodMode = false, ItemImmunity = false, Invisibility = false, Fly = false, FlySpeed = 50, 
     WallNoclip = false, NoclipWall = false, NoclipEverything = false, BypassLand = false,
     UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false,
-    AutoClicker = false, ClickButton = "Left Click", ClickDelay = 0.01
+    AutoClicker = false, ClickButton = "Right Click", ClickDelay = 0.01
 }
 
 local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
@@ -180,7 +180,7 @@ SecMovement:Toggle({ Title = "Air Jump", Value = false, Callback = function(v) M
 
 local SecAutoClicker = TabMagic:Section({ Title = "Auto Clicker", Icon = "mouse-pointer-click", Opened = false })
 SecAutoClicker:Toggle({ Title = "Enable Auto Clicker", Value = false, Callback = function(v) MagicConfig.AutoClicker = v; NotifyState("Auto Clicker", v) end })
-SecAutoClicker:Dropdown({ Title = "Mouse Button", Options = {"Left Click", "Right Click"}, Default = "Left Click", Callback = function(v) MagicConfig.ClickButton = v end })
+SecAutoClicker:Toggle({ Title = "Right Click Mode (Left = Left Click)", Value = true, Callback = function(v) MagicConfig.ClickButton = v and "Right Click" or "Left Click" end })
 SecAutoClicker:Slider({ Title = "Click Delay (1 = 0.01s, 100 = 1.00s)", Value = { Min = 1, Max = 100, Default = 1 }, Callback = function(v) MagicConfig.ClickDelay = v / 100 end })
 
 local SecCombat = TabMagic:Section({ Title = "Combat & Tools", Icon = "swords", Opened = false })
@@ -453,9 +453,17 @@ RunService.Heartbeat:Connect(function()
             end
         end
     end
+
+    for name, btn in pairs(DebugButtonCache) do
+        if not _G.LullabyRegistry[name] then
+            btn:Destroy()
+            DebugButtonCache[name] = nil
+            DebugScroll.CanvasSize = UDim2.new(0, 0, 0, DebugLayout.AbsoluteContentSize.Y + 10)
+        end
+    end
 end)
 
--- 4d. VISUAL GROUP BUILDER UI
+-- 4d. VISUAL GROUP BUILDER UI & SELECTORS
 _G.GroupBuilderUI = Instance.new("Frame", RadarScreen)
 _G.GroupBuilderUI.Size = UDim2.new(0, 240, 0, 360)
 _G.GroupBuilderUI.Position = UDim2.new(0.5, -120, 0.5, -180)
@@ -557,7 +565,7 @@ _G.RefreshGroupBuilder = function()
     GBScroll.CanvasSize = UDim2.new(0, 0, 0, GBLayout.AbsoluteContentSize.Y + 10)
 end
 
--- 4e. UNIVERSAL SELECTOR UI
+-- UNIVERSAL SELECTOR UI
 _G.SelectorUI = Instance.new("Frame", RadarScreen)
 _G.SelectorUI.Size = UDim2.new(0, 240, 0, 360)
 _G.SelectorUI.Position = UDim2.new(0.5, -120, 0.5, -180)
@@ -1106,6 +1114,20 @@ RunService.RenderStepped:Connect(function()
                         hl.OutlineColor = renderColor
                     elseif hl then hl.Enabled = false end
 
+                    if categoryConfig.Box then
+                        if not box then
+                            box = Instance.new("BoxHandleAdornment", inst)
+                            box.Name = "LullabyBox"
+                            box.AlwaysOnTop = true
+                            box.ZIndex = 5
+                            box.Transparency = 0.6
+                            box.Adornee = inst:IsA("Model") and (inst.PrimaryPart or inst:FindFirstChild("HumanoidRootPart")) or inst
+                            box.Size = inst:IsA("Model") and inst:GetExtentsSize() or inst.Size
+                        end
+                        box.Visible = true
+                        box.Color3 = renderColor
+                    elseif box then box.Visible = false end
+
                     if categoryConfig.Name or categoryConfig.Health then
                         if not bb then
                             bb = Instance.new("BillboardGui", inst)
@@ -1155,88 +1177,78 @@ RunService.RenderStepped:Connect(function()
                             if hum then hpBg:FindFirstChild("HPFill").Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0) end
                         elseif hpBg then hpBg.Visible = false end
                     elseif bb then bb.Enabled = false end
+                else
+                    if hl then hl.Enabled = false end
+                    if bb then bb.Enabled = false end
+                    if box then box.Visible = false end
+                end
+            end
+        end
 
-                    local rootPart = inst:IsA("Model") and (inst:FindFirstChild("HumanoidRootPart") or inst.PrimaryPart) or (inst:IsA("BasePart") and inst)
-                    if rootPart then
-                        local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
-                        if onScreen then
-                            if categoryConfig.Tracer then
-                                local line = getLine(lineIndex); lineIndex = lineIndex + 1
-                                drawLine(line, Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y), Vector2.new(screenPos.X, screenPos.Y), renderColor, 1.5)
+        if isVisible and #data.Instances > 0 then
+            for _, inst in ipairs(data.Instances) do
+                local root = inst:IsA("Model") and (inst:FindFirstChild("HumanoidRootPart") or inst.PrimaryPart) or (inst:IsA("BasePart") and inst)
+                
+                if RadarConfig.Enabled and myRoot and root then
+                    local offset = root.Position - myRoot.Position
+                    local maxDistPixel = (RadarConfig.Size / 2) - 5
+                    if (Vector2.new(offset.X / 1.5, offset.Z / 1.5).Magnitude) <= maxDistPixel then
+                        local blip = getBlip()
+                        blip.Position = UDim2.new(0.5, (offset.X / 1.5) - 3, 0.5, (offset.Z / 1.5) - 3)
+                        local icon = blip:FindFirstChild("HeadIcon")
+                        
+                        if RadarConfig.ShowIcons and data.IsPlayer then
+                            local targetPlayer = Players:FindFirstChild(name)
+                            if targetPlayer then
+                                icon.Image = "rbxthumb://type=AvatarHeadShot&id=" .. targetPlayer.UserId .. "&w=48&h=48"
+                                icon.Visible = true
+                                blip.BackgroundTransparency = 1
                             end
-                            
-                            if categoryConfig.Box and inst:IsA("Model") then
-                                local topPos = rootPart.Position + Vector3.new(0, 3, 0)
-                                local botPos = rootPart.Position - Vector3.new(0, 3.5, 0)
-                                local top2D, on1 = Camera:WorldToViewportPoint(topPos)
-                                local bot2D, on2 = Camera:WorldToViewportPoint(botPos)
-                                if on1 and on2 then
-                                    local height = math.abs(bot2D.Y - top2D.Y)
-                                    local width = height * 0.6
-                                    local box = getBox(boxIndex); boxIndex = boxIndex + 1
-                                    box.Position = UDim2.new(0, top2D.X - width/2, 0, top2D.Y)
-                                    box.Size = UDim2.new(0, width, 0, height)
-                                    box:FindFirstChild("Outline").Color = renderColor
-                                    box.Visible = true
-                                end
+                        else
+                            if icon then icon.Visible = false end
+                            blip.BackgroundColor3 = renderColor
+                            blip.BackgroundTransparency = 0
+                        end
+                        
+                        blip.Visible = true
+                        local lbl = blip:FindFirstChild("DataLabel")
+                        if lbl then
+                            if RadarConfig.ShowXYZ then
+                                lbl.Text = string.format("%dm (Y:%d)", math.floor(offset.Magnitude), math.floor(offset.Y))
+                                lbl.TextColor3 = renderColor
+                                lbl.Visible = true
+                            else
+                                lbl.Visible = false
                             end
+                        end
+                    end
+                end
 
-                            if categoryConfig.Skeleton and inst:IsA("Model") then
-                                local conns = inst:FindFirstChild("UpperTorso") and R15_Conns or (inst:FindFirstChild("Torso") and R6_Conns or nil)
-                                if conns then
-                                    for _, conn in ipairs(conns) do
-                                        local p1, p2 = inst:FindFirstChild(conn[1]), inst:FindFirstChild(conn[2])
-                                        if p1 and p2 then
-                                            local s1, on1 = Camera:WorldToViewportPoint(p1.Position)
-                                            local s2, on2 = Camera:WorldToViewportPoint(p2.Position)
-                                            if on1 and on2 then 
-                                                local line = getLine(lineIndex); lineIndex = lineIndex + 1
-                                                drawLine(line, Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), renderColor, 1.5) 
-                                            end
+                if root then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                    if onScreen then
+                        if categoryConfig.Tracer then
+                            local line = getLine(lineIndex); lineIndex = lineIndex + 1
+                            drawLine(line, Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y), Vector2.new(screenPos.X, screenPos.Y), renderColor, 1.5)
+                        end
+                        
+                        if categoryConfig.Skeleton and inst:IsA("Model") then
+                            local conns = inst:FindFirstChild("UpperTorso") and R15_Conns or (inst:FindFirstChild("Torso") and R6_Conns or nil)
+                            if conns then
+                                for _, conn in ipairs(conns) do
+                                    local p1, p2 = inst:FindFirstChild(conn[1]), inst:FindFirstChild(conn[2])
+                                    if p1 and p2 then
+                                        local s1, on1 = Camera:WorldToViewportPoint(p1.Position)
+                                        local s2, on2 = Camera:WorldToViewportPoint(p2.Position)
+                                        if on1 and on2 then 
+                                            local line = getLine(lineIndex); lineIndex = lineIndex + 1
+                                            drawLine(line, Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), renderColor, 1.5) 
                                         end
                                     end
                                 end
                             end
                         end
-                        
-                        if RadarConfig.Enabled and myRoot then
-                            local offset = rootPart.Position - myRoot.Position
-                            local maxDistPixel = (RadarConfig.Size / 2) - 5
-                            if (Vector2.new(offset.X / 1.5, offset.Z / 1.5).Magnitude) <= maxDistPixel then
-                                local blip = getBlip()
-                                blip.Position = UDim2.new(0.5, (offset.X / 1.5) - 3, 0.5, (offset.Z / 1.5) - 3)
-                                local icon = blip:FindFirstChild("HeadIcon")
-                                
-                                if RadarConfig.ShowIcons and data.IsPlayer then
-                                    local targetPlayer = Players:FindFirstChild(name)
-                                    if targetPlayer then
-                                        icon.Image = "rbxthumb://type=AvatarHeadShot&id=" .. targetPlayer.UserId .. "&w=48&h=48"
-                                        icon.Visible = true
-                                        blip.BackgroundTransparency = 1
-                                    end
-                                else
-                                    if icon then icon.Visible = false end
-                                    blip.BackgroundColor3 = renderColor
-                                    blip.BackgroundTransparency = 0
-                                end
-                                
-                                blip.Visible = true
-                                local lbl = blip:FindFirstChild("DataLabel")
-                                if lbl then
-                                    if RadarConfig.ShowXYZ then
-                                        lbl.Text = string.format("%dm (Y:%d)", math.floor(offset.Magnitude), math.floor(offset.Y))
-                                        lbl.TextColor3 = renderColor
-                                        lbl.Visible = true
-                                    else
-                                        lbl.Visible = false
-                                    end
-                                end
-                            end
-                        end
                     end
-                else
-                    if hl then hl.Enabled = false end
-                    if bb then bb.Enabled = false end
                 end
             end
         end
@@ -1280,4 +1292,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v18.5 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v18.6 Executed Successfully!")
