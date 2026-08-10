@@ -1,11 +1,12 @@
 -- ==============================================================================
--- LULLABY v18.4 - COLLISION TAB, ALL-NOCLIP & LAND BYPASS (WINDUI PRO)
+-- LULLABY v18.5 - AUTO CLICKER & ADVANCED RADAR FINAL (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.4 with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v18.5 with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Mouse = LocalPlayer:GetMouse()
@@ -28,7 +29,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.4",
+    Title = "⚡ Lullaby Modular Hub v18.5",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -54,7 +55,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.4 Full Collision System Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.5 Final Update Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -65,7 +66,7 @@ local ESPConfig = {
     Item = { Enabled = false, Glow = true, Name = true, Distance = true, Box = false, Tracer = false }
 }
 
-local RadarConfig = { Enabled = false, ShowXYZ = true }
+local RadarConfig = { Enabled = false, ShowXYZ = true, Size = 200, Locked = false, ShowIcons = false }
 local Colors = { ESP = Color3.fromRGB(0, 255, 0), MCP = Color3.fromRGB(255, 0, 0), Item = Color3.fromRGB(255, 150, 0) }
 
 local AimConfig = { 
@@ -80,7 +81,8 @@ local MagicConfig = {
     SpeedEnabled = false, Speed = 0, JumpEnabled = false, Jump = 50, AirJump = false, ClickTP = false, 
     GodMode = false, ItemImmunity = false, Invisibility = false, Fly = false, FlySpeed = 50, 
     WallNoclip = false, NoclipWall = false, NoclipEverything = false, BypassLand = false,
-    UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false 
+    UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false,
+    AutoClicker = false, ClickButton = "Left Click", ClickDelay = 0.01
 }
 
 local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
@@ -92,7 +94,7 @@ local TabVisuals = Window:Tab({ Title = "ESP & Visuals", Icon = "eye" })
 local TabRadar = Window:Tab({ Title = "Interactive Radar", Icon = "radar" })
 local TabAimbot = Window:Tab({ Title = "Aimbot (Import)", Icon = "crosshair" })
 local TabMagic = Window:Tab({ Title = "Magic & Exploits", Icon = "wand-2" })
-local TabCollision = Window:Tab({ Title = "Collision (All)", Icon = "box-select" }) -- NEW TAB
+local TabCollision = Window:Tab({ Title = "Collision (All)", Icon = "box-select" }) 
 local TabTeleport = Window:Tab({ Title = "Teleport Hub", Icon = "map-pin" })
 local TabEntity = Window:Tab({ Title = "Entity Manager", Icon = "package" })
 
@@ -127,6 +129,15 @@ SecItemESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = fun
 -- --- RADAR TAB ---
 local SecRadar = TabRadar:Section({ Title = "Interactive 2D Radar", Icon = "radar", Opened = true })
 SecRadar:Toggle({ Title = "Show Radar Overlay", Value = false, Callback = function(v) RadarConfig.Enabled = v; if _G.RadarFrame then _G.RadarFrame.Visible = v end; NotifyState("Radar", v) end })
+SecRadar:Slider({ Title = "Radar Size", Value = { Min = 100, Max = 500, Default = 200 }, Callback = function(v) 
+    RadarConfig.Size = v
+    if _G.RadarFrame then _G.RadarFrame.Size = UDim2.new(0, v, 0, v) end
+end })
+SecRadar:Toggle({ Title = "Lock Radar Position (Disable Dragging)", Value = false, Callback = function(v) 
+    RadarConfig.Locked = v
+    if _G.RadarFrame then _G.RadarFrame.Draggable = not v end
+end })
+SecRadar:Toggle({ Title = "Show Player Head Icons", Value = false, Callback = function(v) RadarConfig.ShowIcons = v end })
 SecRadar:Toggle({ Title = "Show Distance & XYZ on Blips", Value = true, Callback = function(v) RadarConfig.ShowXYZ = v end })
 
 -- --- AIMBOT (IMPORT) TAB ---
@@ -137,7 +148,6 @@ SecAim:Toggle({ Title = "Visibility Check (Wall Check)", Value = false, Callback
 local SecAimVisuals = TabAimbot:Section({ Title = "Targeting Visuals", Icon = "eye", Opened = true })
 SecAimVisuals:Toggle({ Title = "Show FOV Circle", Value = false, Callback = function(v) AimConfig.ShowFOV = v; if _G.FOVCircle then _G.FOVCircle.Visible = v end end })
 SecAimVisuals:Slider({ Title = "FOV Size", Value = { Min = 50, Max = 800, Default = 150 }, Callback = function(v) AimConfig.FOV_Size = v end })
-
 SecAimVisuals:Toggle({ Title = "Target Lock Visuals (Red/Green Glow)", Value = false, Callback = function(v) AimConfig.LockHighlight = v end })
 SecAimVisuals:Toggle({ Title = "Show Projectile Hit Box", Value = false, Callback = function(v) AimConfig.ProjectileBox = v end })
 
@@ -167,6 +177,11 @@ SecMovement:Slider({ Title = "Jump Power Level", Value = { Min = 0, Max = 1000, 
     end
 end })
 SecMovement:Toggle({ Title = "Air Jump", Value = false, Callback = function(v) MagicConfig.AirJump = v; NotifyState("Air Jump", v) end })
+
+local SecAutoClicker = TabMagic:Section({ Title = "Auto Clicker", Icon = "mouse-pointer-click", Opened = false })
+SecAutoClicker:Toggle({ Title = "Enable Auto Clicker", Value = false, Callback = function(v) MagicConfig.AutoClicker = v; NotifyState("Auto Clicker", v) end })
+SecAutoClicker:Dropdown({ Title = "Mouse Button", Options = {"Left Click", "Right Click"}, Default = "Left Click", Callback = function(v) MagicConfig.ClickButton = v end })
+SecAutoClicker:Slider({ Title = "Click Delay (1 = 0.01s, 100 = 1.00s)", Value = { Min = 1, Max = 100, Default = 1 }, Callback = function(v) MagicConfig.ClickDelay = v / 100 end })
 
 local SecCombat = TabMagic:Section({ Title = "Combat & Tools", Icon = "swords", Opened = false })
 SecCombat:Toggle({ Title = "High Power Kick (Tool)", Value = false, Callback = function(v) 
@@ -342,8 +357,8 @@ FOVCorner.CornerRadius = UDim.new(1, 0)
 
 -- 4b. RADAR
 _G.RadarFrame = Instance.new("Frame", RadarScreen)
-_G.RadarFrame.Size = UDim2.new(0, 200, 0, 200)
-_G.RadarFrame.Position = UDim2.new(0, 10, 0.5, -100)
+_G.RadarFrame.Size = UDim2.new(0, RadarConfig.Size, 0, RadarConfig.Size)
+_G.RadarFrame.Position = UDim2.new(0, 10, 0.5, -(RadarConfig.Size/2))
 _G.RadarFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 _G.RadarFrame.BackgroundTransparency = 0.3
 _G.RadarFrame.Visible = false
@@ -440,7 +455,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- 4d. VISUAL GROUP BUILDER UI & SELECTORS
+-- 4d. VISUAL GROUP BUILDER UI
 _G.GroupBuilderUI = Instance.new("Frame", RadarScreen)
 _G.GroupBuilderUI.Size = UDim2.new(0, 240, 0, 360)
 _G.GroupBuilderUI.Position = UDim2.new(0.5, -120, 0.5, -180)
@@ -542,7 +557,7 @@ _G.RefreshGroupBuilder = function()
     GBScroll.CanvasSize = UDim2.new(0, 0, 0, GBLayout.AbsoluteContentSize.Y + 10)
 end
 
--- UNIVERSAL SELECTOR UI
+-- 4e. UNIVERSAL SELECTOR UI
 _G.SelectorUI = Instance.new("Frame", RadarScreen)
 _G.SelectorUI.Size = UDim2.new(0, 240, 0, 360)
 _G.SelectorUI.Position = UDim2.new(0.5, -120, 0.5, -180)
@@ -708,9 +723,37 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 6. BACKGROUND WORKERS (NOCLIP, MAGNET & EXPLOITS)
+-- 6. BACKGROUND WORKERS (AUTO CLICKER, NOCLIP, MAGNET & EXPLOITS)
 -- ==============================================================================
--- True Physics-Step Noclip
+
+-- AUTO CLICKER LOOP
+task.spawn(function()
+    while true do
+        if MagicConfig.AutoClicker then
+            pcall(function()
+                if MagicConfig.ClickButton == "Left Click" then
+                    if mouse1click then 
+                        mouse1click() 
+                    else
+                        VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, true, game, 1)
+                        task.wait()
+                        VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, false, game, 1)
+                    end
+                else
+                    if mouse2click then 
+                        mouse2click() 
+                    else
+                        VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 1, true, game, 1)
+                        task.wait()
+                        VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 1, false, game, 1)
+                    end
+                end
+            end)
+        end
+        task.wait(MagicConfig.ClickDelay)
+    end
+end)
+
 RunService.Stepped:Connect(function()
     local char = LocalPlayer.Character
     if char then
@@ -968,6 +1011,7 @@ RunService.RenderStepped:Connect(function()
             blip = Instance.new("Frame", _G.RadarFrame)
             blip.Size = UDim2.new(0, 6, 0, 6)
             Instance.new("UICorner", blip).CornerRadius = UDim.new(1, 0)
+            
             local lbl = Instance.new("TextLabel", blip)
             lbl.Name = "DataLabel"
             lbl.Size = UDim2.new(0, 100, 0, 15)
@@ -977,6 +1021,15 @@ RunService.RenderStepped:Connect(function()
             lbl.Font = Enum.Font.GothamBold
             lbl.TextSize = 10
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local icon = Instance.new("ImageLabel", blip)
+            icon.Name = "HeadIcon"
+            icon.Size = UDim2.new(1, 4, 1, 4)
+            icon.Position = UDim2.new(0, -2, 0, -2)
+            icon.BackgroundTransparency = 1
+            icon.Visible = false
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(1, 0)
+            
             table.insert(RadarBlips, blip)
         end
         blipIndex = blipIndex + 1
@@ -1148,10 +1201,25 @@ RunService.RenderStepped:Connect(function()
                         
                         if RadarConfig.Enabled and myRoot then
                             local offset = rootPart.Position - myRoot.Position
-                            if offset.Magnitude <= 142 then
+                            local maxDistPixel = (RadarConfig.Size / 2) - 5
+                            if (Vector2.new(offset.X / 1.5, offset.Z / 1.5).Magnitude) <= maxDistPixel then
                                 local blip = getBlip()
                                 blip.Position = UDim2.new(0.5, (offset.X / 1.5) - 3, 0.5, (offset.Z / 1.5) - 3)
-                                blip.BackgroundColor3 = renderColor
+                                local icon = blip:FindFirstChild("HeadIcon")
+                                
+                                if RadarConfig.ShowIcons and data.IsPlayer then
+                                    local targetPlayer = Players:FindFirstChild(name)
+                                    if targetPlayer then
+                                        icon.Image = "rbxthumb://type=AvatarHeadShot&id=" .. targetPlayer.UserId .. "&w=48&h=48"
+                                        icon.Visible = true
+                                        blip.BackgroundTransparency = 1
+                                    end
+                                else
+                                    if icon then icon.Visible = false end
+                                    blip.BackgroundColor3 = renderColor
+                                    blip.BackgroundTransparency = 0
+                                end
+                                
                                 blip.Visible = true
                                 local lbl = blip:FindFirstChild("DataLabel")
                                 if lbl then
@@ -1212,4 +1280,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v18.4 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v18.5 Executed Successfully!")
