@@ -1,7 +1,7 @@
 -- ==============================================================================
--- LULLABY v18.7 - MAX PLUS SCANNER, HELD ITEMS & ACCESSORIES (WINDUI PRO)
+-- LULLABY v18.9 - WAYPOINT OVERHAUL & MAX OMNI-SCANNER (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.7 MAX PLUS with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v18.9 MAX PLUS with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,7 +29,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.7",
+    Title = "⚡ Lullaby Modular Hub v18.9",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -55,7 +55,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.7 MAX PLUS Scanner Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.9 Waypoint Fix & Omni-Scanner Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -85,7 +85,7 @@ local MagicConfig = {
     AutoClicker = false, ClickButton = "Right Click", ClickDelay = 0.01
 }
 
-local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
+local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", SelectedWaypoint = "None", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
 
 -- ==============================================================================
 -- 3. WINDUI TABS & SECTIONS
@@ -270,26 +270,38 @@ SecPlayerTP:Button({ Title = "Teleport to Selected Player", Callback = function(
     end
 end })
 
-local SecWaypoints = TabTeleport:Section({ Title = "Saved Waypoints (Max 10)", Icon = "map-pin", Opened = false })
-SecWaypoints:Input({ Title = "Waypoint Name", Placeholder = "e.g. Safe Zone, Base", Callback = function(text) TeleportConfig.WaypointNameInput = text end })
+-- FIXED WAYPOINTS SECTION (No Ugly Stacking)
+local SecWaypoints = TabTeleport:Section({ Title = "Saved Waypoints", Icon = "map-pin", Opened = false })
+SecWaypoints:Input({ Title = "Waypoint Name", Placeholder = "Type name & click Save", Callback = function(text) TeleportConfig.WaypointNameInput = text end })
 
-local function CountWaypoints() local c = 0; for _ in pairs(_G.SavedWaypoints) do c = c + 1 end; return c end
-local WaypointGroup = SecWaypoints:Group({})
-
-SecWaypoints:Button({ Title = "Save Current Position", Callback = function()
-    if CountWaypoints() >= 10 then WindUI:Notify({Title="Limit Reached", Content="You can only save 10 waypoints at a time.", Duration=3}); return end
+SecWaypoints:Button({ Title = "💾 Save Current Position", Callback = function()
     local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if myRoot and TeleportConfig.WaypointNameInput ~= "" then
-        local name = TeleportConfig.WaypointNameInput
-        _G.SavedWaypoints[name] = myRoot.CFrame
-        WaypointGroup:Button({ Title = "TP: " .. name, Callback = function()
-            local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if root and _G.SavedWaypoints[name] then
-                root.CFrame = _G.SavedWaypoints[name]
-                WindUI:Notify({Title="Teleported", Content="Arrived at " .. name, Duration=1.5})
-            end
-        end })
-        WindUI:Notify({Title="Waypoint Saved", Content="Saved Location: " .. name, Duration=2})
+        _G.SavedWaypoints[TeleportConfig.WaypointNameInput] = myRoot.CFrame
+        WindUI:Notify({Title="Waypoint Saved", Content="Saved: " .. TeleportConfig.WaypointNameInput, Duration=2})
+    end
+end })
+
+_G.WaypointDropdown = SecWaypoints:Dropdown({ Title = "Select Waypoint", Options = {"None"}, Callback = function(v) TeleportConfig.SelectedWaypoint = v end })
+
+local WPActionGroup = SecWaypoints:Group({})
+WPActionGroup:Button({ Title = "🚀 Teleport", Callback = function()
+    if TeleportConfig.SelectedWaypoint and TeleportConfig.SelectedWaypoint ~= "None" and _G.SavedWaypoints[TeleportConfig.SelectedWaypoint] then
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = _G.SavedWaypoints[TeleportConfig.SelectedWaypoint]
+            WindUI:Notify({Title="Teleported", Content="Arrived at " .. TeleportConfig.SelectedWaypoint, Duration=1.5})
+        end
+    else
+        WindUI:Notify({Title="Error", Content="Select a valid waypoint first.", Duration=1.5})
+    end
+end })
+
+WPActionGroup:Button({ Title = "❌ Delete", Callback = function()
+    if TeleportConfig.SelectedWaypoint and TeleportConfig.SelectedWaypoint ~= "None" then
+        _G.SavedWaypoints[TeleportConfig.SelectedWaypoint] = nil
+        WindUI:Notify({Title="Deleted", Content="Waypoint removed.", Duration=1.5})
+        TeleportConfig.SelectedWaypoint = "None"
     end
 end })
 
@@ -333,6 +345,26 @@ SecOverrides:Toggle({ Title = "Enable Debug List Overlay", Value = false, Callba
     if _G.DebugUI then _G.DebugUI.Visible = v end
     NotifyState("Debug Overlay", v)
 end })
+
+-- ==============================================================================
+-- 3.5 SMART AUTO-REFRESH UI ENGINE (Fixes Dropdown Glitches)
+-- ==============================================================================
+task.spawn(function()
+    local lastWaypoints = ""
+    while true do
+        task.wait(1)
+        pcall(function()
+            -- Auto-Refresh Waypoint Dropdown
+            local wList = {"None"}
+            for wName, _ in pairs(_G.SavedWaypoints) do table.insert(wList, wName) end
+            local wStr = table.concat(wList, ",")
+            if wStr ~= lastWaypoints then
+                lastWaypoints = wStr
+                if _G.WaypointDropdown then _G.WaypointDropdown:Refresh(wList) end
+            end
+        end)
+    end
+end)
 
 -- ==============================================================================
 -- 4. NATIVE OVERLAY UIs (Radar, FOV, Selectors)
@@ -445,6 +477,7 @@ RunService.Heartbeat:Connect(function()
                 local btn = DebugButtonCache[name]
                 if btn then
                     btn.Visible = true
+                    -- ENSURES IDENTICAL NAMES ARE GROUPED UNDER ONE BUTTON WITH A COUNT #
                     btn.Text = name .. " (" .. #data.Instances .. ") [" .. data.State .. "]"
                     btn.BackgroundColor3 = DebugStateColors[data.State] or DebugStateColors.None
                 end
@@ -672,26 +705,31 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 5. MAX PLUS BROAD SCANNER REGISTRY SYSTEM
+-- 5. OMNI-SCANNER REGISTRY SYSTEM (MAX PLUS)
 -- ==============================================================================
 local function autoClassify(name)
     local lName = string.lower(name)
     if string.find(lName, "bot") or string.find(lName, "enemy") or string.find(lName, "worm") or string.find(lName, "monster") then return "MCP" end
-    if string.find(lName, "banana") or string.find(lName, "item") or string.find(lName, "trap") or string.find(lName, "trigger") or string.find(lName, "coin") or string.find(lName, "wood") or string.find(lName, "water") then return "Item" end
+    if string.find(lName, "banana") or string.find(lName, "item") or string.find(lName, "trap") or string.find(lName, "trigger") or string.find(lName, "coin") then return "Item" end
     return "None"
 end
 
 local function registerEntity(obj, isPlayer)
     if not obj or obj == LocalPlayer.Character then return end
     local name = obj.Name
+    
+    -- EXACT NAME GROUPING LOGIC (ALL ITEMS WITH SAME NAME GO INTO ONE GROUP)
     if not _G.LullabyRegistry[name] then
         _G.LullabyRegistry[name] = { DisplayName = name, State = isPlayer and "ESP" or autoClassify(name), Instances = {}, IsPlayer = isPlayer }
     end
+    
     local entry = _G.LullabyRegistry[name]
     local exists = false
     for _, inst in ipairs(entry.Instances) do if inst == obj then exists = true end end
     if not exists then table.insert(entry.Instances, obj) end
 end
+
+local ignoredNames = {["part"]=true, ["meshpart"]=true, ["baseplate"]=true, ["terrain"]=true, ["spawnlocation"]=true, ["camera"]=true, ["folder"]=true, ["model"]=true, ["handle"]=true, ["humanoidrootpart"]=true, ["head"]=true, ["torso"]=true, ["left arm"]=true, ["right arm"]=true, ["left leg"]=true, ["right leg"]=true, ["upper torso"]=true, ["lower torso"]=true}
 
 task.spawn(function()
     while true do
@@ -703,15 +741,38 @@ task.spawn(function()
             if obj == LocalPlayer.Character then continue end
             if obj:IsDescendantOf(LocalPlayer.Character) and not (obj:IsA("Tool") or obj:IsA("Accessory")) then continue end
             
+            -- Prevent scanning individual NPC body parts if they belong to a valid Model
+            if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and obj.Parent:FindFirstChildOfClass("Humanoid") then continue end
+
             local isEntity = false
+            
+            -- 1. Standard Targets
             if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then isEntity = true end
             if obj:IsA("Tool") or obj:IsA("Accessory") then isEntity = true end
-            if obj:IsA("BasePart") then
+            
+            -- 2. Explicit Interactables
+            if obj:IsA("BasePart") or obj:IsA("Model") then
                 if obj:FindFirstChildOfClass("TouchTransmitter") or obj:FindFirstChildOfClass("ProximityPrompt") or obj:FindFirstChildOfClass("ClickDetector") then 
                     isEntity = true 
-                elseif not obj.Anchored and obj.Name ~= "Part" and obj.Name ~= "MeshPart" and obj.Name ~= "Handle" then
-                    isEntity = true -- Aggressive scan for unanchored physical drops
                 end
+            end
+            
+            -- 3. Omni-Scanner for Loose Props (Crates, Wood, Water, Ores)
+            if not isEntity then
+                if obj:IsA("Model") then 
+                    isEntity = true 
+                elseif obj:IsA("BasePart") then
+                    if not obj.Anchored then 
+                        isEntity = true 
+                    elseif not ignoredNames[string.lower(obj.Name)] and not (obj.Parent and obj.Parent:IsA("Model")) then
+                        isEntity = true
+                    end
+                end
+            end
+
+            -- Final generic junk filter
+            if isEntity and ignoredNames[string.lower(obj.Name)] then
+                isEntity = false
             end
             
             if isEntity then
@@ -1249,14 +1310,6 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
                         end
-
-                        if AimConfig.Enabled and data.State == "MCP" then
-                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                            if distance < shortestDistance then
-                                shortestDistance = distance
-                                closestTarget = root
-                            end
-                        end
                     end
                 end
             end
@@ -1322,4 +1375,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v18.7 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v18.9 Executed Successfully!")
