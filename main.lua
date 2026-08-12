@@ -1,7 +1,7 @@
 -- ==============================================================================
--- LULLABY v18.9 - WAYPOINT OVERHAUL & MAX OMNI-SCANNER (WINDUI PRO)
+-- LULLABY v19.0 - MAX OMNI-SCANNER & SMART MEMORY CLEANUP (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.9 MAX PLUS with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v19.0 MAX OMNI with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,7 +29,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.9",
+    Title = "⚡ Lullaby Modular Hub v19.0",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -55,7 +55,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.9 Waypoint Fix & Omni-Scanner Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v19.0 MAX Omni-Scanner Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -270,7 +270,6 @@ SecPlayerTP:Button({ Title = "Teleport to Selected Player", Callback = function(
     end
 end })
 
--- FIXED WAYPOINTS SECTION (No Ugly Stacking)
 local SecWaypoints = TabTeleport:Section({ Title = "Saved Waypoints", Icon = "map-pin", Opened = false })
 SecWaypoints:Input({ Title = "Waypoint Name", Placeholder = "Type name & click Save", Callback = function(text) TeleportConfig.WaypointNameInput = text end })
 
@@ -347,14 +346,13 @@ SecOverrides:Toggle({ Title = "Enable Debug List Overlay", Value = false, Callba
 end })
 
 -- ==============================================================================
--- 3.5 SMART AUTO-REFRESH UI ENGINE (Fixes Dropdown Glitches)
+-- 3.5 SMART AUTO-REFRESH UI ENGINE
 -- ==============================================================================
 task.spawn(function()
     local lastWaypoints = ""
     while true do
         task.wait(1)
         pcall(function()
-            -- Auto-Refresh Waypoint Dropdown
             local wList = {"None"}
             for wName, _ in pairs(_G.SavedWaypoints) do table.insert(wList, wName) end
             local wStr = table.concat(wList, ",")
@@ -477,7 +475,6 @@ RunService.Heartbeat:Connect(function()
                 local btn = DebugButtonCache[name]
                 if btn then
                     btn.Visible = true
-                    -- ENSURES IDENTICAL NAMES ARE GROUPED UNDER ONE BUTTON WITH A COUNT #
                     btn.Text = name .. " (" .. #data.Instances .. ") [" .. data.State .. "]"
                     btn.BackgroundColor3 = DebugStateColors[data.State] or DebugStateColors.None
                 end
@@ -717,19 +714,14 @@ end
 local function registerEntity(obj, isPlayer)
     if not obj or obj == LocalPlayer.Character then return end
     local name = obj.Name
-    
-    -- EXACT NAME GROUPING LOGIC (ALL ITEMS WITH SAME NAME GO INTO ONE GROUP)
     if not _G.LullabyRegistry[name] then
-        _G.LullabyRegistry[name] = { DisplayName = name, State = isPlayer and "ESP" or autoClassify(name), Instances = {}, IsPlayer = isPlayer }
+        _G.LullabyRegistry[name] = { DisplayName = name, State = isPlayer and "ESP" or autoClassify(name), Instances = {} }
     end
-    
     local entry = _G.LullabyRegistry[name]
     local exists = false
     for _, inst in ipairs(entry.Instances) do if inst == obj then exists = true end end
     if not exists then table.insert(entry.Instances, obj) end
 end
-
-local ignoredNames = {["part"]=true, ["meshpart"]=true, ["baseplate"]=true, ["terrain"]=true, ["spawnlocation"]=true, ["camera"]=true, ["folder"]=true, ["model"]=true, ["handle"]=true, ["humanoidrootpart"]=true, ["head"]=true, ["torso"]=true, ["left arm"]=true, ["right arm"]=true, ["left leg"]=true, ["right leg"]=true, ["upper torso"]=true, ["lower torso"]=true}
 
 task.spawn(function()
     while true do
@@ -737,58 +729,49 @@ task.spawn(function()
         for _, p in ipairs(Players:GetPlayers()) do if p.Character then registerEntity(p.Character, true) end end
         
         for _, obj in ipairs(workspace:GetDescendants()) do
-            -- MAX PLUS UPDATE: Allow scanning inside LocalPlayer specifically for held items/accessories
             if obj == LocalPlayer.Character then continue end
             if obj:IsDescendantOf(LocalPlayer.Character) and not (obj:IsA("Tool") or obj:IsA("Accessory")) then continue end
             
-            -- Prevent scanning individual NPC body parts if they belong to a valid Model
-            if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and obj.Parent:FindFirstChildOfClass("Humanoid") then continue end
-
             local isEntity = false
-            
-            -- 1. Standard Targets
-            if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then isEntity = true end
-            if obj:IsA("Tool") or obj:IsA("Accessory") then isEntity = true end
-            
-            -- 2. Explicit Interactables
-            if obj:IsA("BasePart") or obj:IsA("Model") then
-                if obj:FindFirstChildOfClass("TouchTransmitter") or obj:FindFirstChildOfClass("ProximityPrompt") or obj:FindFirstChildOfClass("ClickDetector") then 
-                    isEntity = true 
+            if obj:IsA("Model") or obj:IsA("Folder") or obj:IsA("Tool") or obj:IsA("Accessory") or obj:IsA("BasePart") then
+                if obj.Name ~= "Terrain" and obj.Name ~= "Camera" then
+                    isEntity = true
                 end
-            end
-            
-            -- 3. Omni-Scanner for Loose Props (Crates, Wood, Water, Ores)
-            if not isEntity then
-                if obj:IsA("Model") then 
-                    isEntity = true 
-                elseif obj:IsA("BasePart") then
-                    if not obj.Anchored then 
-                        isEntity = true 
-                    elseif not ignoredNames[string.lower(obj.Name)] and not (obj.Parent and obj.Parent:IsA("Model")) then
-                        isEntity = true
-                    end
-                end
-            end
-
-            -- Final generic junk filter
-            if isEntity and ignoredNames[string.lower(obj.Name)] then
-                isEntity = false
             end
             
             if isEntity then
                 local isPlayer = false
-                for _, p in ipairs(Players:GetPlayers()) do if p.Character == obj then isPlayer = true end end
+                for _, p in ipairs(Players:GetPlayers()) do if p.Character == obj then isPlayer = true break end end
                 if not isPlayer then
                     if myRoot then
-                        local targetPos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetPivot().Position) or obj.Position
-                        if (targetPos - myRoot.Position).Magnitude <= 1000 then registerEntity(obj, false) end
+                        local targetPos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetPivot().Position) or (obj:IsA("BasePart") and obj.Position) or nil
+                        if targetPos then
+                            if (targetPos - myRoot.Position).Magnitude <= 5000 then registerEntity(obj, false) end
+                        else
+                            registerEntity(obj, false) 
+                        end
                     else
                         registerEntity(obj, false) 
                     end
                 end
             end
         end
-        task.wait(1.5) 
+
+        -- SMART MEMORY CLEANUP: Removes items that no longer exist, UNLESS you actively saved them
+        for name, data in pairs(_G.LullabyRegistry) do
+            if not data.IsPlayer then
+                for i = #data.Instances, 1, -1 do
+                    if not data.Instances[i] or not data.Instances[i].Parent then
+                        table.remove(data.Instances, i)
+                    end
+                end
+                if #data.Instances == 0 and data.State == "None" then
+                    _G.LullabyRegistry[name] = nil
+                end
+            end
+        end
+
+        task.wait(2) 
     end
 end)
 
@@ -796,23 +779,18 @@ end)
 -- 6. BACKGROUND WORKERS (AUTO CLICKER, NOCLIP, MAGNET & EXPLOITS)
 -- ==============================================================================
 
--- AUTO CLICKER LOOP
 task.spawn(function()
     while true do
         if MagicConfig.AutoClicker then
             pcall(function()
                 if MagicConfig.ClickButton == "Left Click" then
-                    if mouse1click then 
-                        mouse1click() 
-                    else
+                    if mouse1click then mouse1click() else
                         VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, true, game, 1)
                         task.wait()
                         VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, false, game, 1)
                     end
                 else
-                    if mouse2click then 
-                        mouse2click() 
-                    else
+                    if mouse2click then mouse2click() else
                         VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 1, true, game, 1)
                         task.wait()
                         VirtualInputManager:SendMouseButtonEvent(Mouse.X, Mouse.Y, 1, false, game, 1)
@@ -851,10 +829,7 @@ RunService.Heartbeat:Connect(function()
 
     if MagicConfig.JumpEnabled and char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then 
-            hum.UseJumpPower = true
-            hum.JumpPower = MagicConfig.Jump 
-        end
+        if hum then hum.UseJumpPower = true; hum.JumpPower = MagicConfig.Jump end
     end
 
     if MagicConfig.Invisibility and char then
@@ -1310,6 +1285,14 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
                         end
+
+                        if AimConfig.Enabled and data.State == "MCP" then
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                closestTarget = root
+                            end
+                        end
                     end
                 end
             end
@@ -1375,4 +1358,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v18.9 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v19.0 Executed Successfully!")
