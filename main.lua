@@ -1,7 +1,7 @@
 -- ==============================================================================
--- LULLABY v18.6 - AUTO CLICKER TOGGLE FIX FINAL (WINDUI PRO)
+-- LULLABY v18.7 - MAX PLUS SCANNER, HELD ITEMS & ACCESSORIES (WINDUI PRO)
 -- ==============================================================================
-print("⏳ [Lullaby] Initializing Engine v18.6 with WindUI...")
+print("⏳ [Lullaby] Initializing Engine v18.7 MAX PLUS with WindUI...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,7 +29,7 @@ if not success or not WindUI then
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "⚡ Lullaby Modular Hub v18.6",
+    Title = "⚡ Lullaby Modular Hub v18.7",
     Icon = "zap",
     Author = "by Lullaby",
     Folder = "LullabyHub",
@@ -55,7 +55,7 @@ local function NotifyState(title, state)
     WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
 end
 
-WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.6 Final Update Loaded.", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v18.7 MAX PLUS Scanner Loaded.", Icon = "check-circle", Duration = 4 })
 
 -- ==============================================================================
 -- 2. CONFIGURATION & STATE
@@ -453,14 +453,6 @@ RunService.Heartbeat:Connect(function()
             end
         end
     end
-
-    for name, btn in pairs(DebugButtonCache) do
-        if not _G.LullabyRegistry[name] then
-            btn:Destroy()
-            DebugButtonCache[name] = nil
-            DebugScroll.CanvasSize = UDim2.new(0, 0, 0, DebugLayout.AbsoluteContentSize.Y + 10)
-        end
-    end
 end)
 
 -- 4d. VISUAL GROUP BUILDER UI & SELECTORS
@@ -565,7 +557,7 @@ _G.RefreshGroupBuilder = function()
     GBScroll.CanvasSize = UDim2.new(0, 0, 0, GBLayout.AbsoluteContentSize.Y + 10)
 end
 
--- UNIVERSAL SELECTOR UI
+-- 4e. UNIVERSAL SELECTOR UI
 _G.SelectorUI = Instance.new("Frame", RadarScreen)
 _G.SelectorUI.Size = UDim2.new(0, 240, 0, 360)
 _G.SelectorUI.Position = UDim2.new(0.5, -120, 0.5, -180)
@@ -680,12 +672,12 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 5. BROAD SCANNER REGISTRY SYSTEM
+-- 5. MAX PLUS BROAD SCANNER REGISTRY SYSTEM
 -- ==============================================================================
 local function autoClassify(name)
     local lName = string.lower(name)
     if string.find(lName, "bot") or string.find(lName, "enemy") or string.find(lName, "worm") or string.find(lName, "monster") then return "MCP" end
-    if string.find(lName, "banana") or string.find(lName, "item") or string.find(lName, "trap") or string.find(lName, "trigger") or string.find(lName, "coin") then return "Item" end
+    if string.find(lName, "banana") or string.find(lName, "item") or string.find(lName, "trap") or string.find(lName, "trigger") or string.find(lName, "coin") or string.find(lName, "wood") or string.find(lName, "water") then return "Item" end
     return "None"
 end
 
@@ -707,11 +699,20 @@ task.spawn(function()
         for _, p in ipairs(Players:GetPlayers()) do if p.Character then registerEntity(p.Character, true) end end
         
         for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj == LocalPlayer.Character or obj:IsDescendantOf(LocalPlayer.Character) then continue end
+            -- MAX PLUS UPDATE: Allow scanning inside LocalPlayer specifically for held items/accessories
+            if obj == LocalPlayer.Character then continue end
+            if obj:IsDescendantOf(LocalPlayer.Character) and not (obj:IsA("Tool") or obj:IsA("Accessory")) then continue end
+            
             local isEntity = false
             if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then isEntity = true end
-            if obj:IsA("BasePart") and (obj:FindFirstChildOfClass("TouchTransmitter") or obj:FindFirstChildOfClass("ProximityPrompt") or obj:FindFirstChildOfClass("ClickDetector")) then isEntity = true end
-            if obj:IsA("Tool") then isEntity = true end
+            if obj:IsA("Tool") or obj:IsA("Accessory") then isEntity = true end
+            if obj:IsA("BasePart") then
+                if obj:FindFirstChildOfClass("TouchTransmitter") or obj:FindFirstChildOfClass("ProximityPrompt") or obj:FindFirstChildOfClass("ClickDetector") then 
+                    isEntity = true 
+                elseif not obj.Anchored and obj.Name ~= "Part" and obj.Name ~= "MeshPart" and obj.Name ~= "Handle" then
+                    isEntity = true -- Aggressive scan for unanchored physical drops
+                end
+            end
             
             if isEntity then
                 local isPlayer = false
@@ -726,7 +727,7 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(2) 
+        task.wait(1.5) 
     end
 end)
 
@@ -1248,6 +1249,14 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
                         end
+
+                        if AimConfig.Enabled and data.State == "MCP" then
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                            if distance < shortestDistance then
+                                shortestDistance = distance
+                                closestTarget = root
+                            end
+                        end
                     end
                 end
             end
@@ -1290,6 +1299,27 @@ LocalPlayer.CharacterAdded:Connect(function(char)
             end
         end)
     end
+    
+    if MagicConfig.HighKick then
+        local kickTool = Instance.new("Tool", LocalPlayer:WaitForChild("Backpack"))
+        kickTool.Name = "🦵 High Kick"
+        kickTool.RequiresHandle = false
+        kickTool.Activated:Connect(function()
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Model") and obj ~= char and obj:FindFirstChild("HumanoidRootPart") then
+                    local targetRoot = obj:FindFirstChild("HumanoidRootPart")
+                    if (targetRoot.Position - root.Position).Magnitude < 15 then
+                        local bv = Instance.new("BodyVelocity", targetRoot)
+                        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                        bv.Velocity = (targetRoot.Position - root.Position).Unit * 500 + Vector3.new(0, 100, 0)
+                        game:GetService("Debris"):AddItem(bv, 0.2)
+                    end
+                end
+            end
+        end)
+    end
 end)
 
-print("🚀 [Lullaby] WindUI v18.6 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v18.7 Executed Successfully!")
