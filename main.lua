@@ -1,4 +1,216 @@
-ññ        if t then t:Destroy() end
+-- ==============================================================================
+-- LULLABY v19.1 - ANTI-CRASH OMNI-SCANNER & UI OPTIMIZATION (WINDUI PRO)
+-- ==============================================================================
+print("⏳ [Lullaby] Initializing Engine v19.1 ANTI-CRASH with WindUI...")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local Mouse = LocalPlayer:GetMouse()
+
+_G.LullabyRegistry = _G.LullabyRegistry or {} 
+_G.SavedWaypoints = _G.SavedWaypoints or {} 
+_G.CustomGroups = _G.CustomGroups or {} 
+local GroupCounter = 1
+
+-- ==============================================================================
+-- 1. LOAD WINDUI & CREATE WINDOW
+-- ==============================================================================
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
+end)
+
+if not success or not WindUI then
+    warn("❌ [Lullaby] Failed to load WindUI. Please check your internet or executor.")
+    return
+end
+
+local Window = WindUI:CreateWindow({
+    Title = "⚡ Lullaby Modular Hub v19.1",
+    Icon = "zap",
+    Author = "by Lullaby",
+    Folder = "LullabyHub",
+    Size = UDim2.fromOffset(580, 460),
+    MinSize = Vector2.new(560, 350),
+    MaxSize = Vector2.new(850, 560),
+    Transparent = true,
+    Theme = "Dark",
+    Resizable = true,
+    SideBarWidth = 195,
+    HideSearchBar = true,
+    KeySystem = {
+        Title = "Access Required",
+        Note = "Enter the access key 'free' to continue.",
+        KeyValidator = function(key) return key == "free" end,
+        SaveKey = true,
+        Thumbnail = { Image = "rbxassetid://10618928818", Title = "Free Access Key: free" }
+    }
+})
+
+local function NotifyState(title, state)
+    local stateStr = type(state) == "boolean" and (state and "Enabled" or "Disabled") or state
+    WindUI:Notify({ Title = title, Content = stateStr, Duration = 1.5 })
+end
+
+WindUI:Notify({ Title = "Welcome to Lullaby", Content = "v19.1 Anti-Crash Loaded Safely.", Icon = "check-circle", Duration = 4 })
+
+-- ==============================================================================
+-- 2. CONFIGURATION & STATE
+-- ==============================================================================
+local ESPConfig = {
+    Player = { Enabled = true, Glow = true, Name = true, Distance = true, Health = false, Box = false, Skeleton = false, Tracer = false },
+    MCP = { Enabled = false, Glow = true, Name = true, Distance = true, Health = false, Box = false, Skeleton = false, Tracer = false },
+    Item = { Enabled = false, Glow = true, Name = true, Distance = true, Box = false, Tracer = false }
+}
+
+local RadarConfig = { Enabled = false, ShowXYZ = true, Size = 200, Locked = false, ShowIcons = false }
+local Colors = { ESP = Color3.fromRGB(0, 255, 0), MCP = Color3.fromRGB(255, 0, 0), Item = Color3.fromRGB(255, 150, 0) }
+
+local AimConfig = { 
+    Enabled = false, TargetPlayers = true, TargetMCP = true, 
+    ShowFOV = false, FOV_Size = 150, VisCheck = false,
+    TargetPart = "Head", 
+    Smoothness = 0.5, Speed = 1,
+    LockHighlight = false, ProjectileBox = false
+}
+
+local MagicConfig = { 
+    SpeedEnabled = false, Speed = 0, JumpEnabled = false, Jump = 50, AirJump = false, ClickTP = false, 
+    GodMode = false, ItemImmunity = false, Invisibility = false, Fly = false, FlySpeed = 50, 
+    WallNoclip = false, NoclipWall = false, NoclipEverything = false, BypassLand = false,
+    UnlimitedItems = false, InstantCooldown = false, InfiniteEnergy = false, DebugEnabled = false, HighKick = false,
+    AutoClicker = false, ClickButton = "Right Click", ClickDelay = 0.01
+}
+
+local TeleportConfig = { TargetPlayer = "None", WaypointNameInput = "New Waypoint", SelectedWaypoint = "None", MagnetActive = false, MagnetMode = "Me", MagnetStaticPos = nil, MagnetTargetGroup = "ALL ITEMS" }
+
+-- ==============================================================================
+-- 3. WINDUI TABS & SECTIONS
+-- ==============================================================================
+local TabVisuals = Window:Tab({ Title = "ESP & Visuals", Icon = "eye" })
+local TabRadar = Window:Tab({ Title = "Interactive Radar", Icon = "radar" })
+local TabAimbot = Window:Tab({ Title = "Aimbot (Import)", Icon = "crosshair" })
+local TabMagic = Window:Tab({ Title = "Magic & Exploits", Icon = "wand-2" })
+local TabCollision = Window:Tab({ Title = "Collision (All)", Icon = "box-select" }) 
+local TabTeleport = Window:Tab({ Title = "Teleport Hub", Icon = "map-pin" })
+local TabEntity = Window:Tab({ Title = "Entity Manager", Icon = "package" })
+
+-- --- VISUALS TAB ---
+local SecPlayerESP = TabVisuals:Section({ Title = "Player ESP", Icon = "user", Opened = true })
+SecPlayerESP:Toggle({ Title = "Enable Player ESP", Value = true, Callback = function(v) ESPConfig.Player.Enabled = v; NotifyState("Player ESP", v) end })
+SecPlayerESP:Toggle({ Title = "Glow (Aura)", Value = true, Callback = function(v) ESPConfig.Player.Glow = v end })
+SecPlayerESP:Toggle({ Title = "Show Name", Value = true, Callback = function(v) ESPConfig.Player.Name = v end })
+SecPlayerESP:Toggle({ Title = "Show Distance", Value = true, Callback = function(v) ESPConfig.Player.Distance = v end })
+SecPlayerESP:Toggle({ Title = "Show Health Bar", Value = false, Callback = function(v) ESPConfig.Player.Health = v end })
+SecPlayerESP:Toggle({ Title = "Show 2D Box", Value = false, Callback = function(v) ESPConfig.Player.Box = v end })
+SecPlayerESP:Toggle({ Title = "Show Skeleton", Value = false, Callback = function(v) ESPConfig.Player.Skeleton = v end })
+SecPlayerESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = function(v) ESPConfig.Player.Tracer = v end })
+
+local SecMCPESP = TabVisuals:Section({ Title = "MCP Bot ESP", Icon = "bot", Opened = false })
+SecMCPESP:Toggle({ Title = "Enable MCP ESP", Value = false, Callback = function(v) ESPConfig.MCP.Enabled = v; NotifyState("MCP ESP", v) end })
+SecMCPESP:Toggle({ Title = "Glow (Aura)", Value = true, Callback = function(v) ESPConfig.MCP.Glow = v end })
+SecMCPESP:Toggle({ Title = "Show Name", Value = true, Callback = function(v) ESPConfig.MCP.Name = v end })
+SecMCPESP:Toggle({ Title = "Show Distance", Value = true, Callback = function(v) ESPConfig.MCP.Distance = v end })
+SecMCPESP:Toggle({ Title = "Show Health Bar", Value = false, Callback = function(v) ESPConfig.MCP.Health = v end })
+SecMCPESP:Toggle({ Title = "Show 2D Box", Value = false, Callback = function(v) ESPConfig.MCP.Box = v end })
+SecMCPESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = function(v) ESPConfig.MCP.Tracer = v end })
+
+local SecItemESP = TabVisuals:Section({ Title = "Item ESP", Icon = "box", Opened = false })
+SecItemESP:Toggle({ Title = "Enable Item ESP", Value = false, Callback = function(v) ESPConfig.Item.Enabled = v; NotifyState("Item ESP", v) end })
+SecItemESP:Toggle({ Title = "Glow (Aura)", Value = true, Callback = function(v) ESPConfig.Item.Glow = v end })
+SecItemESP:Toggle({ Title = "Show Name", Value = true, Callback = function(v) ESPConfig.Item.Name = v end })
+SecItemESP:Toggle({ Title = "Show Distance", Value = true, Callback = function(v) ESPConfig.Item.Distance = v end })
+SecItemESP:Toggle({ Title = "Show 2D Box", Value = false, Callback = function(v) ESPConfig.Item.Box = v end })
+SecItemESP:Toggle({ Title = "Show Bottom Tracers", Value = false, Callback = function(v) ESPConfig.Item.Tracer = v end })
+
+-- --- RADAR TAB ---
+local SecRadar = TabRadar:Section({ Title = "Interactive 2D Radar", Icon = "radar", Opened = true })
+SecRadar:Toggle({ Title = "Show Radar Overlay", Value = false, Callback = function(v) RadarConfig.Enabled = v; if _G.RadarFrame then _G.RadarFrame.Visible = v end; NotifyState("Radar", v) end })
+SecRadar:Slider({ Title = "Radar Size", Value = { Min = 100, Max = 500, Default = 200 }, Callback = function(v) 
+    RadarConfig.Size = v
+    if _G.RadarFrame then _G.RadarFrame.Size = UDim2.new(0, v, 0, v) end
+end })
+SecRadar:Toggle({ Title = "Lock Radar Position (Disable Dragging)", Value = false, Callback = function(v) 
+    RadarConfig.Locked = v
+    if _G.RadarFrame then _G.RadarFrame.Draggable = not v end
+end })
+SecRadar:Toggle({ Title = "Show Player Head Icons", Value = false, Callback = function(v) RadarConfig.ShowIcons = v end })
+SecRadar:Toggle({ Title = "Show Distance & XYZ on Blips", Value = true, Callback = function(v) RadarConfig.ShowXYZ = v end })
+
+-- --- AIMBOT (IMPORT) TAB ---
+local SecAim = TabAimbot:Section({ Title = "Advanced Aimbot Engine", Icon = "target", Opened = true })
+SecAim:Toggle({ Title = "Enable Aimbot Lock", Value = false, Callback = function(v) AimConfig.Enabled = v; NotifyState("Aimbot", v) end })
+SecAim:Toggle({ Title = "Visibility Check (Wall Check)", Value = false, Callback = function(v) AimConfig.VisCheck = v; NotifyState("Vis-Check", v) end })
+
+local SecAimVisuals = TabAimbot:Section({ Title = "Targeting Visuals", Icon = "eye", Opened = true })
+SecAimVisuals:Toggle({ Title = "Show FOV Circle", Value = false, Callback = function(v) AimConfig.ShowFOV = v; if _G.FOVCircle then _G.FOVCircle.Visible = v end end })
+SecAimVisuals:Slider({ Title = "FOV Size", Value = { Min = 50, Max = 800, Default = 150 }, Callback = function(v) AimConfig.FOV_Size = v end })
+SecAimVisuals:Toggle({ Title = "Target Lock Visuals (Red/Green Glow)", Value = false, Callback = function(v) AimConfig.LockHighlight = v end })
+SecAimVisuals:Toggle({ Title = "Show Projectile Hit Box", Value = false, Callback = function(v) AimConfig.ProjectileBox = v end })
+
+local SecAimConfig = TabAimbot:Section({ Title = "Robotic Tuning", Icon = "settings-2", Opened = true })
+SecAimConfig:Dropdown({ Title = "Target Part", Options = {"Head", "Torso", "Legs"}, Default = "Head", Callback = function(v) AimConfig.TargetPart = v end })
+SecAimConfig:Slider({ Title = "Aim Smoothness", Value = { Min = 1, Max = 100, Default = 50 }, Callback = function(v) AimConfig.Smoothness = v / 100 end })
+SecAimConfig:Slider({ Title = "Aimbot Speed (Power)", Value = { Min = 1, Max = 100, Default = 50 }, Callback = function(v) AimConfig.Speed = v / 25 end })
+
+-- --- MAGIC TAB ---
+local SecMovement = TabMagic:Section({ Title = "Movement Exploits", Icon = "move", Opened = true })
+SecMovement:Toggle({ Title = "Admin Fly (Camera-Look Android)", Value = false, Callback = function(v) MagicConfig.Fly = v; NotifyState("Fly Mode", v) end })
+SecMovement:Slider({ Title = "Fly Speed", Value = { Min = 1, Max = 100, Default = 50 }, Callback = function(v) MagicConfig.FlySpeed = v end })
+SecMovement:Toggle({ Title = "Enable Speed Boost", Value = false, Callback = function(v) MagicConfig.SpeedEnabled = v; NotifyState("Speed Boost", v) end })
+SecMovement:Slider({ Title = "Speed Power", Value = { Min = 0, Max = 1000, Default = 0 }, Callback = function(v) MagicConfig.Speed = (v / 100) * 1.5 end })
+SecMovement:Toggle({ Title = "Enable Jump Power", Value = false, Callback = function(v) 
+    MagicConfig.JumpEnabled = v 
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.UseJumpPower = true; hum.JumpPower = v and MagicConfig.Jump or 50 end
+    NotifyState("Custom Jump", v)
+end })
+SecMovement:Slider({ Title = "Jump Power Level", Value = { Min = 0, Max = 1000, Default = 50 }, Callback = function(v) 
+    MagicConfig.Jump = v 
+    if MagicConfig.JumpEnabled and LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = v end
+    end
+end })
+SecMovement:Toggle({ Title = "Air Jump", Value = false, Callback = function(v) MagicConfig.AirJump = v; NotifyState("Air Jump", v) end })
+
+local SecAutoClicker = TabMagic:Section({ Title = "Auto Clicker", Icon = "mouse-pointer-click", Opened = false })
+SecAutoClicker:Toggle({ Title = "Enable Auto Clicker", Value = false, Callback = function(v) MagicConfig.AutoClicker = v; NotifyState("Auto Clicker", v) end })
+SecAutoClicker:Toggle({ Title = "Right Click Mode (Left = Left Click)", Value = true, Callback = function(v) MagicConfig.ClickButton = v and "Right Click" or "Left Click" end })
+SecAutoClicker:Slider({ Title = "Click Delay (1 = 0.01s, 100 = 1.00s)", Value = { Min = 1, Max = 100, Default = 1 }, Callback = function(v) MagicConfig.ClickDelay = v / 100 end })
+
+local SecCombat = TabMagic:Section({ Title = "Combat & Tools", Icon = "swords", Opened = false })
+SecCombat:Toggle({ Title = "High Power Kick (Tool)", Value = false, Callback = function(v) 
+    MagicConfig.HighKick = v 
+    NotifyState("High Kick Tool", v)
+    if v then
+        local kickTool = Instance.new("Tool", LocalPlayer.Backpack)
+        kickTool.Name = "🦵 High Kick"
+        kickTool.RequiresHandle = false
+        kickTool.Activated:Connect(function()
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Model") and obj ~= char and obj:FindFirstChild("HumanoidRootPart") then
+                    local targetRoot = obj:FindFirstChild("HumanoidRootPart")
+                    local dist = (targetRoot.Position - root.Position).Magnitude
+                    if dist < 15 then
+                        local bv = Instance.new("BodyVelocity", targetRoot)
+                        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                        bv.Velocity = (targetRoot.Position - root.Position).Unit * 500 + Vector3.new(0, 100, 0)
+                        game:GetService("Debris"):AddItem(bv, 0.2)
+                    end
+                end
+            end
+        end)
+    else
+        local t = LocalPlayer.Backpack:FindFirstChild("🦵 High Kick") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("🦵 High Kick"))
+        if t then t:Destroy() end
     end
 end })
 
@@ -190,7 +402,7 @@ RadarCenter.Position = UDim2.new(0.5, -2, 0.5, -2)
 RadarCenter.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", RadarCenter).CornerRadius = UDim.new(1, 0)
 
--- 4c. DEBUG UI
+-- 4c. DEBUG UI (Memory Optimized)
 _G.DebugUI = Instance.new("Frame", RadarScreen)
 _G.DebugUI.Size = UDim2.new(0, 240, 0, 360)
 _G.DebugUI.Position = UDim2.new(1, -250, 0.5, -180)
@@ -244,9 +456,13 @@ RunService.Heartbeat:Connect(function()
     if not MagicConfig.DebugEnabled then return end
     local filter = string.lower(DebugSearch.Text)
     
+    local displayCount = 0
     for name, data in pairs(_G.LullabyRegistry) do
         if not data.IsPlayer then
             if filter == "" or string.find(string.lower(name), filter) then
+                displayCount = displayCount + 1
+                if displayCount > 150 and filter == "" then continue end -- Prevent UI lag for huge maps
+                
                 if not DebugButtonCache[name] then
                     local btn = Instance.new("TextButton", DebugScroll)
                     btn.Size = UDim2.new(1, 0, 0, 28)
@@ -257,7 +473,6 @@ RunService.Heartbeat:Connect(function()
                     
                     btn.MouseButton1Click:Connect(function() data.State = NextStateCycle[data.State] end)
                     DebugButtonCache[name] = btn
-                    DebugScroll.CanvasSize = UDim2.new(0, 0, 0, DebugLayout.AbsoluteContentSize.Y + 10)
                 end
                 
                 local btn = DebugButtonCache[name]
@@ -271,6 +486,7 @@ RunService.Heartbeat:Connect(function()
             end
         end
     end
+    DebugScroll.CanvasSize = UDim2.new(0, 0, 0, DebugLayout.AbsoluteContentSize.Y + 10)
 end)
 
 -- 4d. VISUAL GROUP BUILDER UI & SELECTORS
@@ -490,7 +706,7 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 5. OMNI-SCANNER REGISTRY SYSTEM (MAX PLUS)
+-- 5. ANTI-CRASH OMNI-SCANNER REGISTRY SYSTEM
 -- ==============================================================================
 local function autoClassify(name)
     local lName = string.lower(name)
@@ -503,7 +719,7 @@ local function registerEntity(obj, isPlayer)
     if not obj or obj == LocalPlayer.Character then return end
     local name = obj.Name
     if not _G.LullabyRegistry[name] then
-        _G.LullabyRegistry[name] = { DisplayName = name, State = isPlayer and "ESP" or autoClassify(name), Instances = {} }
+        _G.LullabyRegistry[name] = { DisplayName = name, State = isPlayer and "ESP" or autoClassify(name), Instances = {}, IsPlayer = isPlayer }
     end
     local entry = _G.LullabyRegistry[name]
     local exists = false
@@ -511,41 +727,66 @@ local function registerEntity(obj, isPlayer)
     if not exists then table.insert(entry.Instances, obj) end
 end
 
+local ignoredNames = {
+    ["part"] = true, ["meshpart"] = true, ["baseplate"] = true, 
+    ["terrain"] = true, ["spawnlocation"] = true, ["camera"] = true,
+    ["humanoidrootpart"] = true, ["head"] = true, ["torso"] = true,
+    ["left arm"] = true, ["right arm"] = true, ["left leg"] = true,
+    ["right leg"] = true, ["upper torso"] = true, ["lower torso"] = true,
+    ["leftupperarm"]=true, ["leftlowerarm"]=true, ["lefthand"]=true,
+    ["rightupperarm"]=true, ["rightlowerarm"]=true, ["righthand"]=true,
+    ["leftupperleg"]=true, ["leftlowerleg"]=true, ["leftfoot"]=true,
+    ["rightupperleg"]=true, ["rightlowerleg"]=true, ["rightfoot"]=true,
+    ["handle"] = true
+}
+
 task.spawn(function()
     while true do
         local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        for _, p in ipairs(Players:GetPlayers()) do if p.Character then registerEntity(p.Character, true) end end
+        local playerSet = {}
+        for _, p in ipairs(Players:GetPlayers()) do 
+            if p.Character then 
+                playerSet[p.Character] = true
+                registerEntity(p.Character, true) 
+            end 
+        end
         
-        for _, obj in ipairs(workspace:GetDescendants()) do
+        local descendants = workspace:GetDescendants()
+        for i = 1, #descendants do
+            -- ANTI-CRASH YIELD: Breathes every 400 items so the engine doesn't choke and freeze
+            if i % 400 == 0 then task.wait() end 
+            
+            local obj = descendants[i]
+            if not obj then continue end
             if obj == LocalPlayer.Character then continue end
             if obj:IsDescendantOf(LocalPlayer.Character) and not (obj:IsA("Tool") or obj:IsA("Accessory")) then continue end
             
-            local isEntity = false
-            if obj:IsA("Model") or obj:IsA("Folder") or obj:IsA("Tool") or obj:IsA("Accessory") or obj:IsA("BasePart") then
-                if obj.Name ~= "Terrain" and obj.Name ~= "Camera" then
-                    isEntity = true
-                end
+            -- Fast player check
+            local isPlayer = false
+            local temp = obj
+            while temp and temp ~= workspace do
+                if playerSet[temp] then isPlayer = true; break end
+                temp = temp.Parent
             end
+            if isPlayer then continue end
             
-            if isEntity then
-                local isPlayer = false
-                for _, p in ipairs(Players:GetPlayers()) do if p.Character == obj then isPlayer = true break end end
-                if not isPlayer then
-                    if myRoot then
-                        local targetPos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetPivot().Position) or (obj:IsA("BasePart") and obj.Position) or nil
-                        if targetPos then
-                            if (targetPos - myRoot.Position).Magnitude <= 5000 then registerEntity(obj, false) end
-                        else
-                            registerEntity(obj, false) 
-                        end
-                    else
-                        registerEntity(obj, false) 
+            if obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Tool") or obj:IsA("Accessory") then
+                local lName = string.lower(obj.Name)
+                if ignoredNames[lName] then continue end
+                
+                -- Skip parts that are just body parts of a valid model
+                if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and obj.Parent:FindFirstChildOfClass("Humanoid") then continue end
+                
+                local pos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetPivot().Position) or (obj:IsA("BasePart") and obj.Position) or nil
+                if pos and myRoot then
+                    if (pos - myRoot.Position).Magnitude <= 5000 then
+                        registerEntity(obj, false)
                     end
                 end
             end
         end
 
-        -- SMART MEMORY CLEANUP: Removes items that no longer exist, UNLESS you actively saved them
+        -- SMART MEMORY CLEANUP
         for name, data in pairs(_G.LullabyRegistry) do
             if not data.IsPlayer then
                 for i = #data.Instances, 1, -1 do
@@ -553,6 +794,7 @@ task.spawn(function()
                         table.remove(data.Instances, i)
                     end
                 end
+                -- Only wipe the entry if the user didn't explicitly save it as an Item or MCP
                 if #data.Instances == 0 and data.State == "None" then
                     _G.LullabyRegistry[name] = nil
                 end
@@ -567,6 +809,7 @@ end)
 -- 6. BACKGROUND WORKERS (AUTO CLICKER, NOCLIP, MAGNET & EXPLOITS)
 -- ==============================================================================
 
+-- AUTO CLICKER LOOP
 task.spawn(function()
     while true do
         if MagicConfig.AutoClicker then
@@ -617,7 +860,10 @@ RunService.Heartbeat:Connect(function()
 
     if MagicConfig.JumpEnabled and char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.UseJumpPower = true; hum.JumpPower = MagicConfig.Jump end
+        if hum then 
+            hum.UseJumpPower = true
+            hum.JumpPower = MagicConfig.Jump 
+        end
     end
 
     if MagicConfig.Invisibility and char then
@@ -1073,14 +1319,6 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
                         end
-
-                        if AimConfig.Enabled and data.State == "MCP" then
-                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                            if distance < shortestDistance then
-                                shortestDistance = distance
-                                closestTarget = root
-                            end
-                        end
                     end
                 end
             end
@@ -1146,4 +1384,4 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
-print("🚀 [Lullaby] WindUI v19.0 Executed Successfully!")
+print("🚀 [Lullaby] WindUI v19.1 Executed Successfully!")
